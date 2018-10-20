@@ -30,4 +30,5 @@
 #define DRV_CMD_CLOSE_STRLEN (sizeof(DRV_CMD_CLOSE) - 1))
 
 #define DRV_WORKFILE_PERM 0666
+#define DRV_READBUF_SZ 512
 
