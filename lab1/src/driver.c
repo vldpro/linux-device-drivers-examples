@@ -8,8 +8,10 @@ static struct {
     struct cdev cdev;
     struct class* cl;
     struct file* workfile_fp;
+    loff_t write_offset;
 } mscope = {
-    .workfile_fp = NULL
+    .workfile_fp = NULL,
+    .write_offset = 0
 };
 
 
@@ -57,6 +59,17 @@ static bool is_digit(char c)
 }
 
 
+static size_t digits_count(unsigned long long num)
+{
+    size_t cnt = 0;
+    while (num) {
+        cnt++;
+        num /= 10;
+    } 
+    return cnt;
+}
+
+
 static unsigned long long parse_num(char *num, size_t dig_cnt)
 {
     char tmp = num[dig_cnt];
@@ -71,7 +84,7 @@ static unsigned long long parse_num(char *num, size_t dig_cnt)
 }
 
 
-static void process(char *str)
+static unsigned long long sum_all_numbers(char *str)
 {
     size_t digits_cnt = 0;
     unsigned long long sum = 0;
@@ -87,6 +100,7 @@ static void process(char *str)
     } while (*str++);
 
     printk(WRITE_CMD_DBG "sum of all numbers: %llu", sum);
+    return sum;
 }
 
 
@@ -115,21 +129,47 @@ static bool cmd_close(void)
     }
     kfile_close(mscope.workfile_fp);
     mscope.workfile_fp = NULL;
+    mscope.write_offset = 0;
     return true;
+}
+
+
+static char *create_io_buffer_for_num(unsigned long long num, size_t digits_cnt)
+{
+    char *io_buf = kmalloc(digits_cnt + 1, GFP_KERNEL);
+
+    printk(WRITE_CMD_DBG "Creating io buffer for number with %lu digits\n", digits_cnt);
+    sprintf(io_buf, "%llu", num);
+    io_buf[digits_cnt] = '\n';
+
+    return io_buf;
 }
 
 
 static bool cmd_write(char *buf, size_t sz, loff_t *off)
 {
     ssize_t wrote = 0;
+    size_t dig_cnt = 0;
+    unsigned long long sum = 0;
+    char *sum_buf = NULL;
+
     if (!mscope.workfile_fp) {
         printk(WRITE_CMD_ERR "file is not opened");
         return false;
     }
-    process(buf);
-    wrote = kfile_write(mscope.workfile_fp, off, buf, sz);
+
+    sum = sum_all_numbers(buf);
+    dig_cnt = digits_count(sum);
+    sum_buf = create_io_buffer_for_num(sum, dig_cnt);
+
+    wrote = kfile_write(mscope.workfile_fp, 
+                        &mscope.write_offset, 
+                        sum_buf, 
+                        dig_cnt + 1);
+
     printk(WRITE_CMD_DBG "size: %lu; wrote: %li\n", sz, wrote);
-    return wrote == sz;
+    kfree(sum_buf);
+    return sz;
 }
 
 
