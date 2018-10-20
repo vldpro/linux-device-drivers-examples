@@ -10,7 +10,7 @@ all:
 clean:
 	make -C "$(MODULES_BUILD_PATH)" M="$(PWD)" clean
 
-insmod:
+insmod: all
 	sudo rmmod $(KERN_MOD); sudo insmod $(KERN_MOD).ko && sudo chown ${USER} /dev/chdev
 
 test: insmod
