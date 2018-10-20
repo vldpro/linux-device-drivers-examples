@@ -51,6 +51,45 @@ static ssize_t chdev_read(struct file *fp,
 #define WRITE_CMD_DBG DRV_LOG_WR_DBG WRITE_LOG_PREFIX 
 
 
+static bool is_digit(char c)
+{
+    return c >= 0x30 && c <= 0x39;
+}
+
+
+static unsigned long long parse_num(char *num, size_t dig_cnt)
+{
+    char tmp = num[dig_cnt];
+    unsigned long long res = 0;
+
+    num[dig_cnt] = '\0';
+    printk(WRITE_CMD_DBG "Find a number with %lu digits: %s", dig_cnt, num);
+    kstrtoull(num, 10, &res);
+    num[dig_cnt] = tmp;
+
+    return res;
+}
+
+
+static void process(char *str)
+{
+    size_t digits_cnt = 0;
+    unsigned long long sum = 0;
+
+    do {
+        if (is_digit(*str)) {
+            digits_cnt++;
+        } else if (digits_cnt) {
+            char* num_start = str - digits_cnt;
+            sum += parse_num(num_start, digits_cnt);
+            digits_cnt = 0;
+        }
+    } while (*str++);
+
+    printk(WRITE_CMD_DBG "sum of all numbers: %llu", sum);
+}
+
+
 static bool str_is_empty(char const* str)
 {
     return str[0] == '\0';
@@ -80,13 +119,14 @@ static bool cmd_close(void)
 }
 
 
-static bool cmd_write(char const *buf, size_t sz, loff_t *off)
+static bool cmd_write(char *buf, size_t sz, loff_t *off)
 {
     ssize_t wrote = 0;
     if (!mscope.workfile_fp) {
         printk(WRITE_CMD_ERR "file is not opened");
         return false;
     }
+    process(buf);
     wrote = kfile_write(mscope.workfile_fp, off, buf, sz);
     printk(WRITE_CMD_DBG "size: %lu; wrote: %li\n", sz, wrote);
     return wrote == sz;
