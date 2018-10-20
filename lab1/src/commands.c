@@ -58,7 +58,7 @@ ssize_t kfile_write(struct file *file,
 
 
 ssize_t kfile_read(struct file *file, 
-                   unsigned long long offset, 
+                   unsigned long long* offset, 
                    char *data, 
                    size_t size)
 {
@@ -67,7 +67,7 @@ ssize_t kfile_read(struct file *file,
 
     oldfs = get_fs();
     set_fs(get_ds());
-    ret = vfs_read(file, data, size, &offset);
+    ret = vfs_read(file, data, size, offset);
     set_fs(oldfs);
 
     return ret;

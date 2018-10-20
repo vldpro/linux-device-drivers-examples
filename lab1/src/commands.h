@@ -19,7 +19,7 @@
 struct file *kfile_open(const char *fname, mode_t mode);
 void kfile_close(struct file *fp);
 ssize_t kfile_write(struct file *file, unsigned long long* offset, const char *data, size_t size);
-ssize_t kfile_read(struct file *file, unsigned long long offset, char *data, size_t size);
+ssize_t kfile_read(struct file *file, unsigned long long* offset, char *data, size_t size);
 
 char* str_copy_ks(char *kstr, const char __user *buf, size_t buflen);
 bool str_contains(const char *str, const char* substr);
