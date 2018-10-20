@@ -27,15 +27,6 @@ static int chdev_release(struct inode *ip, struct file *fp)
 }
 
 
-static ssize_t chdev_read(struct file *fp, 
-                          char __user *buf, 
-                          size_t len, 
-                          loff_t* off)
-{
-    return DRV_SUCCESS;
-}
-
-
 // Log message prefixes
 #define OPEN_LOG_PREFIX "open(): "
 #define OPEN_CMD_INFO DRV_LOG_WR_INFO OPEN_LOG_PREFIX
@@ -51,6 +42,55 @@ static ssize_t chdev_read(struct file *fp,
 #define WRITE_CMD_INFO DRV_LOG_WR_INFO WRITE_LOG_PREFIX 
 #define WRITE_CMD_ERR DRV_LOG_WR_INFO WRITE_LOG_PREFIX 
 #define WRITE_CMD_DBG DRV_LOG_WR_DBG WRITE_LOG_PREFIX 
+
+#define READ_LOG_PREFIX "read(): "
+#define READ_CMD_INFO DRV_LOG_INFO READ_LOG_PREFIX
+#define READ_CMD_ERR DRV_LOG_INFO READ_LOG_PREFIX 
+#define READ_CMD_DBG DRV_LOG_DBG READ_LOG_PREFIX 
+
+
+static void str_replace(char *str, char a, char b)
+{
+    do {
+        if (*str == a)
+            *str = b;
+    } while (*str++);
+}
+
+
+static ssize_t chdev_read(struct file *fp, 
+                          char __user *buf, 
+                          size_t len, 
+                          loff_t* off)
+{
+    loff_t offset = 0;
+    char *kbuf = NULL;
+    if (!mscope.workfile_fp) {
+        printk(READ_CMD_ERR "Could not read from file. File is not open");
+        return len;
+    }
+    
+    kbuf = kmalloc(DRV_READBUF_SZ, GFP_KERNEL);
+
+    printk(READ_CMD_INFO "Reading the file");
+    while(true) {
+        ssize_t read = kfile_read(mscope.workfile_fp, &offset, kbuf, DRV_READBUF_SZ - 1);
+        if (read < 0) {
+            printk(READ_CMD_ERR "Could not read from file. Error %li ", read);
+        } else if (read == 0) {
+            printk(READ_CMD_INFO "End of file.");
+        } else {
+            kbuf[DRV_READBUF_SZ - 1] = '\0';
+            str_replace(kbuf, '\n', ' ');
+            printk(READ_CMD_INFO "Content: %s", kbuf);
+            continue;
+        }
+        break;
+    }
+
+    kfree(kbuf);
+    return 0;
+}
 
 
 static bool is_digit(char c)
