@@ -8,10 +8,8 @@ static struct {
     struct cdev cdev;
     struct class* cl;
     struct file* workfile_fp;
-    loff_t write_offset;
 } mscope = {
     .workfile_fp = NULL,
-    .write_offset = 0
 };
 
 
@@ -169,7 +167,6 @@ static bool cmd_close(void)
     }
     kfile_close(mscope.workfile_fp);
     mscope.workfile_fp = NULL;
-    mscope.write_offset = 0;
     return true;
 }
 
@@ -203,7 +200,7 @@ static bool cmd_write(char *buf, size_t sz, loff_t *off)
     sum_buf = create_io_buffer_for_num(sum, dig_cnt);
 
     wrote = kfile_write(mscope.workfile_fp, 
-                        &mscope.write_offset, 
+                        &mscope.workfile_fp->f_pos, 
                         sum_buf, 
                         dig_cnt + 1);
 

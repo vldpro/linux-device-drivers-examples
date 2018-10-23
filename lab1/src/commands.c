@@ -23,7 +23,7 @@ struct file *kfile_open(const char *path, mode_t mode)
 
     oldfs = get_fs();
     set_fs(get_ds());
-    filp = filp_open(path, O_RDWR | O_CREAT, mode);
+    filp = filp_open(path, O_RDWR | O_CREAT | O_APPEND, mode);
     set_fs(oldfs);
 
     if (IS_ERR(filp)) {
