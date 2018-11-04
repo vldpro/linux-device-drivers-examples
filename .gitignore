@@ -1,2 +1,7 @@
 .*
 *.log
+*.o
+*.ko
+*.symvers
+*.order
+*.mod.c
