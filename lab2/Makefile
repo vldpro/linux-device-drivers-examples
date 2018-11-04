@@ -11,7 +11,7 @@ clean:
 	make -C "$(MODULES_BUILD_PATH)" M="$(PWD)" clean
 
 insmod: all
-	sudo rmmod $(KERN_MOD); sudo insmod $(KERN_MOD).ko && sudo chown ${USER} /dev/chdev
+	sudo rmmod $(KERN_MOD); sudo insmod $(KERN_MOD).ko
 
 test: insmod
 	echo "lskdgj" >/tmp/MY_FILE && dmesg
