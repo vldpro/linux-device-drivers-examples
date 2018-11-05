@@ -38,7 +38,7 @@ static int drv_gendisk_create(struct drv_blkdev * blkdev)
 
     LG_DBG("Alloc gendisk");
     blkdev->gd = alloc_disk(blkdev->minors);
-    if (blkdev->gd)
+    if (!blkdev->gd)
         return -ENOMEM;
 
     LG_DBG("Initialize gendisk");
@@ -49,10 +49,13 @@ static int drv_gendisk_create(struct drv_blkdev * blkdev)
     blkdev->gd->private_data = blkdev;
 
     snprintf(blkdev->gd->disk_name, DRV_DISKNAME_MAX, DRV_NAME);
-    set_capacity(blkdev->gd, DRV_NSECTORS);
 
     LG_DBG("Adding gendisk into the system");
+
+    // See https://stackoverflow.com/questions/13518404/add-disk-hangs-on-insmod
+    set_capacity(blkdev->gd, 0);
     add_disk(blkdev->gd);
+    set_capacity(blkdev->gd, DRV_NSECTORS);
 
     return DRV_OP_SUCCESS;
 }
@@ -127,6 +130,7 @@ static int __init drv_init(void)
         goto undo_blkdev_reg;
     }
 
+    LG_INF("Module successfully initialized");
     return DRV_OP_SUCCESS;
 
 undo_blkdev_reg:
