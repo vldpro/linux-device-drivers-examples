@@ -38,25 +38,36 @@ static struct
                     .blk_ops = {.owner = THIS_MODULE}};
 
 
-static void drv_transfer(struct drv_blkdev * blkdev,
-                         sector_t sector,
-                         size_t nsect,
-                         char * buf,
-                         int write)
+static int drv_transfer(struct drv_blkdev * blkdev,
+                        sector_t sector,
+                        size_t nsect,
+                        char * buf,
+                        int write)
 {
     size_t off = sector * DRV_SECTOR_SZ;
     size_t nbytes = nsect * DRV_SECTOR_SZ;
     DRV_LOG_CTX_SET("drv_transfer");
 
+    printk(KERN_DEBUG "drv_transfer: params: off: %lu, nbytes: %lu\n",
+           off,
+           nbytes);
+
+    if (write)
+        LG_DBG("start writing");
+    else
+        LG_DBG("start reading");
+
     if ((off + nbytes) > blkdev->size) {
         LG_FAILED_TO("write to / read from device. Out of bound.");
-        return;
+        return 3;
     }
 
     if (write)
         memcpy(blkdev->vdisk + off, buf, nbytes);
     else
         memcpy(buf, blkdev->vdisk + off, nbytes);
+
+    return 0;
 }
 
 
@@ -64,6 +75,7 @@ static void drv_request_handler(struct request_queue * queue)
 {
     struct request * rq = NULL;
     struct drv_blkdev * blkdev = queue->queuedata;
+    int blk_op_status = 0;
 
     DRV_LOG_CTX_SET("drv_request_handler");
 
@@ -78,13 +90,13 @@ static void drv_request_handler(struct request_queue * queue)
             continue;
         }
 
-        drv_transfer(blkdev,
-                     blk_rq_pos(rq),
-                     blk_rq_cur_sectors(rq),
-                     bio_data(rq->bio),
-                     rq_data_dir(rq));
+        blk_op_status = drv_transfer(blkdev,
+                                     blk_rq_pos(rq),
+                                     blk_rq_cur_sectors(rq),
+                                     bio_data(rq->bio),
+                                     rq_data_dir(rq));
 
-        __blk_end_request_all(rq, 0);
+        __blk_end_request_all(rq, blk_op_status);
     }
 }
 
