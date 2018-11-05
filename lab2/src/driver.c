@@ -125,6 +125,7 @@ out:
 static int __init drv_init(void)
 {
     DRV_LOG_INIT(INFO, "Starting initialization\n");
+    DRV_LOG_INIT(DEBUG, "Register block device");
     module_scope.major = register_blkdev(module_scope.major, DRV_NAME);
 
     if (module_scope.major <= 0) {
@@ -132,6 +133,7 @@ static int __init drv_init(void)
         goto err;
     }
 
+    DRV_LOG_INIT(DEBUG, "Create block device");
     module_scope.blkdev
         = bdev_create(module_scope.major, DRV_MINORS, module_scope.disk_geo);
 
@@ -140,6 +142,7 @@ static int __init drv_init(void)
         goto undo_blkdev_reg;
     }
 
+    DRV_LOG_INIT(DEBUG, "Add disk to the system");
     add_disk(module_scope.blkdev->gd);
     DRV_LOG_INIT(INFO, "Successfully initialized\n");
     return DRV_OP_SUCCESS;

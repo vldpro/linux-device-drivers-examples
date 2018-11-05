@@ -19,5 +19,4 @@
 
 #define DRV_LOG_INIT(type, ...) DRV_LOG(type, "init", __VA_ARGS__)
 
-
 #endif
