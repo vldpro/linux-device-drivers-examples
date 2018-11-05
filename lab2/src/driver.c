@@ -59,7 +59,7 @@ static int drv_transfer(struct drv_blkdev * blkdev,
 
     if ((off + nbytes) > blkdev->size) {
         LG_FAILED_TO("write to / read from device. Out of bound.");
-        return 3;
+        return -ENOSPC;
     }
 
     if (write)
