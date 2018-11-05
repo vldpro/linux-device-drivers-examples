@@ -1,6 +1,7 @@
 #include <linux/blkdev.h>
 #include <linux/fs.h>
 #include <linux/genhd.h>
+#include <linux/hdreg.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -28,23 +29,24 @@ static struct
     int blk_major;
     struct drv_blkdev blkdev;
     struct block_device_operations blk_ops;
-} module_globals = {
-    .blk_major = 0,
-    .blkdev
-    = {.vdisk = NULL, .queue = NULL, size = 0, gd = NULL, minors = DRV_MINORS},
-    .blk_ops = {.owner = THIS_MODULE}};
+} module_globals = {.blk_major = 0,
+                    .blkdev = {.vdisk = NULL,
+                               .queue = NULL,
+                               .size = 0,
+                               .gd = NULL,
+                               .minors = DRV_MINORS},
+                    .blk_ops = {.owner = THIS_MODULE}};
 
 
 static void drv_transfer(struct drv_blkdev * blkdev,
-                         size_t sector,
+                         sector_t sector,
                          size_t nsect,
-                         char const * buf,
+                         char * buf,
                          int write)
 {
-    DRV_LOG_CTX_SET("drv_transfer");
-
     size_t off = sector * DRV_SECTOR_SZ;
     size_t nbytes = nsect * DRV_SECTOR_SZ;
+    DRV_LOG_CTX_SET("drv_transfer");
 
     if ((off + nbytes) > blkdev->size) {
         LG_FAILED_TO("write to / read from device. Out of bound.");
@@ -52,34 +54,34 @@ static void drv_transfer(struct drv_blkdev * blkdev,
     }
 
     if (write)
-        memcpy(blkdev->vdisk + offset, buf, nbytes);
+        memcpy(blkdev->vdisk + off, buf, nbytes);
     else
-        memcpy(buf, blkdev->vdisk + offset, nbytes);
+        memcpy(buf, blkdev->vdisk + off, nbytes);
 }
 
 
 static void drv_request_handler(struct request_queue * queue)
 {
     struct request * rq = NULL;
-    struct drv_blkdev blkdev = queue->queuedata;
+    struct drv_blkdev * blkdev = queue->queuedata;
 
     DRV_LOG_CTX_SET("drv_request_handler");
 
     for (;;) {
-        rq = blk_fetch_request(q);
+        rq = blk_fetch_request(queue);
         if (rq == NULL)
             break;
 
-        if (blk_rq_is_passthrough(rq)) {
+        if (rq->cmd_type != REQ_TYPE_FS) {
             LG_WRN("Skip non-fs request");
             __blk_end_request_all(rq, -EIO);
             continue;
         }
 
         drv_transfer(blkdev,
-                     rq->sector,
-                     rq->current_nr_sectors,
-                     rq->buffer,
+                     blk_rq_pos(rq),
+                     blk_rq_cur_sectors(rq),
+                     bio_data(rq->bio),
                      rq_data_dir(rq));
 
         __blk_end_request_all(rq, 0);

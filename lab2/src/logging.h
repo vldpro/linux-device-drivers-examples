@@ -20,8 +20,8 @@
 #define DRV_LOG_INIT(type, ...) DRV_LOG(type, "init", __VA_ARGS__)
 
 // Contextual logging
-#define DRV_LOG_CTX_TYPE_SET(ctx, type)        \
-    static char const * _hidden_log_ctx_##type \
+#define DRV_LOG_CTX_TYPE_SET(ctx, type)                                \
+    static char const * _hidden_log_ctx_##type __attribute__((unused)) \
         = KERN_##type DRV_LOG_NAME DRV_LOG_DELIM ctx DRV_LOG_DELIM "%s\n";
 
 #define DRV_LOG_CTX_SET(ctx)         \
