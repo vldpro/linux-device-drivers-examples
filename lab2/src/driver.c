@@ -29,6 +29,18 @@ struct drv_blkdev_geo
 };
 
 
+static struct
+{
+    struct drv_blkdev_geo disk_geo;
+    struct drv_blkdev * blkdev;
+    int major;
+    char const * device_name;
+} module_scope
+    = {.disk_geo = {.nsectors = DRV_NSECTORS, .sector_sz = DRV_SECTOR_SZ},
+       .device_name = DRV_NAME,
+       .major = 0};
+
+
 static void drv_request(struct request_queue * queue) {}
 
 
@@ -111,7 +123,7 @@ bdev_create(int major, int minors, struct drv_blkdev_geo geo)
     return bdev;
 
 undo_init_queue:
-    vfree(bdev->queue);
+    blk_cleanup_queue(bdev->queue);
 undo_bdisk_alloc:
     vfree(bdev->vdisk);
 undo_bdev_alloc:
@@ -131,37 +143,44 @@ out:
 
 static int __init drv_init(void)
 {
-    int major = 15;
-    struct drv_blkdev * bdev = NULL;
-    struct drv_blkdev_geo geo
-        = {.nsectors = DRV_NSECTORS, .sector_sz = DRV_SECTOR_SZ};
-
     DRV_LOG_INIT(INFO, "Starting initialization\n");
-    major = register_blkdev(major, DRV_NAME);
+    module_scope.major = register_blkdev(module_scope.major, DRV_NAME);
 
-    if (major <= 0) {
+    if (module_scope.major <= 0) {
         DRV_LOG_INIT(ERR, "Could not register block device\n");
         goto err;
     }
 
-    bdev = bdev_create(major, DRV_MINORS, geo);
-    if (!bdev) {
+    module_scope.blkdev
+        = bdev_create(module_scope.major, DRV_MINORS, module_scope.disk_geo);
+
+    if (!module_scope.blkdev) {
         DRV_LOG_INIT(ERR, "Could not create bdev");
         goto undo_blkdev_reg;
     }
 
-    add_disk(bdev->gd);
+    add_disk(module_scope.blkdev->gd);
     DRV_LOG_INIT(INFO, "Successfully initialized");
     return DRV_OP_SUCCESS;
 
 undo_blkdev_reg:
-    unregister_blkdev(major, DRV_NAME);
+    unregister_blkdev(module_scope.major, DRV_NAME);
 err:
     return -EBUSY;
 }
 
 
-static void __exit drv_exit(void) {}
+static void __exit drv_exit(void)
+{
+    struct drv_blkdev * blkdev = module_scope.blkdev;
+    del_gendisk(blkdev->gd);
+    put_disk(blkdev->gd);
+    unregister_blkdev(module_scope.major, module_scope.device_name);
+    blk_cleanup_queue(blkdev->queue);
+    vfree(blkdev->vdisk);
+    kfree(blkdev);
+    module_scope.blkdev = NULL;
+}
 
 
 MODULE_LICENSE("GPL");
