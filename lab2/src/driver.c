@@ -1,5 +1,6 @@
 #include <linux/blkdev.h>
 #include <linux/fs.h>
+#include <linux/genhd.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -14,162 +15,131 @@
 
 struct drv_blkdev
 {
-    int size;
-    uint8_t * vdisk;
-    spinlock_t lock;
-    struct request_queue * queue;
+    int minors;
     struct gendisk * gd;
+    struct request_queue * queue;
+    spinlock_t lock;
 };
-
-
-struct drv_blkdev_geo
-{
-    int nsectors;
-    int sector_sz;
-};
-
 
 static struct
 {
-    struct drv_blkdev_geo disk_geo;
-    struct drv_blkdev * blkdev;
-    int major;
-    char const * device_name;
-} module_scope
-    = {.disk_geo = {.nsectors = DRV_NSECTORS, .sector_sz = DRV_SECTOR_SZ},
-       .device_name = DRV_NAME,
-       .major = 0};
-
-static struct block_device_operations blk_ops = {.owner = THIS_MODULE};
-
-static void drv_request(struct request_queue * queue) {}
+    int blk_major;
+    struct drv_blkdev blkdev;
+    struct block_device_operations blk_ops;
+} module_globals = {.blk_major = 0, .blk_ops = {.owner = THIS_MODULE}};
 
 
-static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
-                                       struct block_device_operations * drv_ops,
-                                       int major,
-                                       int minors)
+static void drv_request_handler(struct request_queue * queue) {}
+
+
+static int drv_gendisk_create(struct drv_blkdev * blkdev)
 {
-    int which = 0;
-    struct gendisk * gd = alloc_disk(minors);
+    DRV_LOG_CTX_SET("drv_gendisk_create");
 
-    if (!gd) {
-        DRV_LOG_INIT(ERR, "Failed to alloc memory for gendisk\n");
-        return NULL;
-    }
+    LG_DBG("Alloc gendisk")
+    dev->gd = alloc_disk(blkdev->minors);
+    if (dev->gd)
+        return -ENOMEM;
 
-    gd->major = major;
-    gd->first_minor = which * minors;
-    gd->fops = drv_ops;
-    gd->queue = bdev->queue;
-    gd->private_data = bdev;
+    LG_DBG("Initialize gendisk");
+    dev->gd->major = module_globals.blk_major;
+    dev->gd->first_minor = 0;
+    dev->gd->fops = &module_globals.blk_ops;
+    dev->gd->queue = blkdev->queue;
+    dev->gd->private_data = blkdev;
 
-    snprintf(gd->disk_name, 32, DRV_NAME "%c", which + 'a');
-    set_capacity(gd, bdev->size);
+    snprintf(dev->gd->disk_name, DRV_DISKNAME_MAX, DRV_NAME);
+    set_capacity(dev->gd, DRV_NSECTORS);
 
-    return gd;
+    LG_DBG("Adding gendisk into the system");
+    add_disk(dev->gd);
+
+    return DRV_OP_SUCCESS;
 }
 
 
-static struct drv_blkdev *
-bdev_create(int major, int minors, struct drv_blkdev_geo geo)
+static void drv_gendisk_delete(struct gendisk * gd)
 {
-    struct drv_blkdev * bdev = NULL;
+    if (gd)
+        del_gendisk(gd);
+}
 
-    DRV_LOG_INIT(DEBUG, "Alloc mem for blkdev struct\n");
-    bdev = kmalloc(sizeof(struct block_device), GFP_KERNEL);
-    if (!bdev) {
-        DRV_LOG_INIT(ERR, "Failed to alloc memory for block_device\n");
+
+static int drv_blkdev_init(struct drv_blkdev * blkdev, int minors)
+{
+    DRV_LOG_CTX_SET("drv_blkdev_init");
+
+    blkdev->minors = minors;
+
+    LG_DBG("Initialize queue");
+    spin_lock_init(blkdev->lock);
+    blkdev->queue = blk_init_queue(drv_request_handler, &blkdev->lock);
+    if (!blkdev->queue) {
+        LG_FAILED_TO("initialize requests queue");
         goto out;
     }
 
-    memset(bdev, 0, sizeof(struct block_device));
-    bdev->size = geo.nsectors * geo.sector_sz;
-    bdev->vdisk = vmalloc(bdev->size);
+    LG_DBG("Setting blk logical size");
+    blk_queue_logical_block_size(blkdev->queue, DRV_SECTOR_SZ);
+    blkdev->queue->queuedata = blkdev;
 
-    DRV_LOG_INIT(DEBUG, "Alloc mem for vritual disk\n");
-    if (bdev->vdisk == NULL) {
-        DRV_LOG_INIT(ERR, "Failed to alloc memory for virtual disk\n");
-        goto undo_bdev_alloc;
+    LG_DBG("Create gendisk");
+    if (drv_gendisk_create(blkdev) < 0) {
+        LG_FAILED_TO("create gendisk");
+        goto blk_cleanup_queue;
     }
 
-    spin_lock_init(&bdev->lock);
+    return DRV_OP_SUCCESS;
 
-    DRV_LOG_INIT(DEBUG, "Create device's request queue\n");
-    bdev->queue = blk_init_queue(drv_request, &bdev->lock);
-    if (!bdev->queue) {
-        DRV_LOG_INIT(ERR, "Failed to allocate memory for blk queue\n");
-        goto undo_bdisk_alloc;
-    }
-
-    blk_queue_logical_block_size(bdev->queue, geo.sector_sz);
-
-    DRV_LOG_INIT(DEBUG, "Create gendisk structure\n");
-    bdev->gd = gendisk_create(bdev, &blk_ops, major, minors);
-    if (!bdev->gd) {
-        DRV_LOG_INIT(ERR, "Failed to allocate gendisk\n");
-        goto undo_init_queue;
-    }
-
-    DRV_LOG_INIT(INFO, "Block device successfully created\n");
-    return bdev;
-
-undo_init_queue:
-    blk_cleanup_queue(bdev->queue);
-undo_bdisk_alloc:
-    vfree(bdev->vdisk);
-undo_bdev_alloc:
-    kfree(bdev);
+undo_blk_queue_init:
+    blk_cleanup_queue(blkdev->queue);
 out:
-    return NULL;
+    return -ENOMEM;
+}
+
+
+static void drv_blkdev_deinit(struct drv_blkdev * blkdev)
+{
+    drv_gendisk_delete(blkdev->gd);
+    blk_cleanup_queue(blkdev->queue);
 }
 
 
 static int __init drv_init(void)
 {
-    DRV_LOG_CTX_SET("my_init");
-    DRV_LOG_CTX(INFO, "Starting initialization");
-    return -EBUSY;
+    int status = 0;
+    DRV_LOG_CTX_SET("drv_init");
+    LG_INF("Start module initialization");
 
-    DRV_LOG_INIT(DEBUG, "Register block device\n");
-    module_scope.major = register_blkdev(module_scope.major, DRV_NAME);
-
-    if (module_scope.major <= 0) {
-        DRV_LOG_INIT(ERR, "Could not register block device\n");
-        goto err;
+    LG_DBG("Register blkdev");
+    module_globals.blk_major
+        = register_blkdev(module_globals.blk_major, DRV_NAME);
+    if (module_globals.blk_major <= 0) {
+        LG_FAILED_TO("register blkdev");
+        status = module_globals.blk_major;
+        goto out;
     }
 
-    DRV_LOG_INIT(DEBUG, "Create block device\n");
-    module_scope.blkdev
-        = bdev_create(module_scope.major, DRV_MINORS, module_scope.disk_geo);
-
-    if (!module_scope.blkdev) {
-        DRV_LOG_INIT(ERR, "Could not create bdev\n");
+    LG_DBG("Initialize blkdev");
+    status = drv_blkdev_init(module_globals.blkdev);
+    if (status < 0) {
+        LG_FAILED_TO("initialize blkdev");
         goto undo_blkdev_reg;
-    };
+    }
 
-    DRV_LOG_INIT(DEBUG, "Add disk to the system\n");
-    add_disk(module_scope.blkdev->gd);
-    DRV_LOG_INIT(INFO, "Successfully initialized\n");
     return DRV_OP_SUCCESS;
 
 undo_blkdev_reg:
-    unregister_blkdev(module_scope.major, DRV_NAME);
-err:
-    return -EBUSY;
+    unregister_blkdev(module_globals.blk_major, DRV_NAME);
+out:
+    return status;
 }
 
 
 static void __exit drv_exit(void)
 {
-    struct drv_blkdev * blkdev = module_scope.blkdev;
-    del_gendisk(blkdev->gd);
-    put_disk(blkdev->gd);
-    unregister_blkdev(module_scope.major, module_scope.device_name);
-    blk_cleanup_queue(blkdev->queue);
-    vfree(blkdev->vdisk);
-    kfree(blkdev);
-    module_scope.blkdev = NULL;
+    drv_blkdev_deinit(module_globals.blkdev);
+    unregister_blkdev(module_globals.blk_major, DRV_NAME);
 }
 
 

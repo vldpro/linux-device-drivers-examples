@@ -35,4 +35,11 @@
         printk(_hidden_log_ctx_##type, log_msg); \
     } while (0)
 
+// user's logging functions
+#define LG_INF(log_msg) DRV_LOG_CTX(INFO, log_msg)
+#define LG_ERR(log_msg) DRV_LOG_CTX(ERR, log_msg)
+#define LG_DBG(log_msg) DRV_LOG_CTX(DEBUG, log_msg)
+#define LG_WRN(log_msg) DRV_LOG_CTX(WARNING, log_msg)
+#define LG_FAILED_TO(action) LG_ERR("Failed to " action)
+
 #endif
