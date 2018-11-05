@@ -49,19 +49,20 @@ IncludeCategories:
     Priority: 40
 ReflowComments: false
 AlignEscapedNewlinesLeft: true
+AllowAllParametersOfDeclarationOnNextLine: false 
+AlignOperands: true 
+AlwaysBreakAfterReturnType: None 
+AlwaysBreakBeforeMultilineStrings: true 
 
 # Not changed:
 AccessModifierOffset: -4
 AlignConsecutiveAssignments: false
-AlignOperands: false
 AlignTrailingComments: false
-AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterDefinitionReturnType: None
-AlwaysBreakBeforeMultilineStrings: false
 BinPackArguments: false
 BinPackParameters: false
 BreakBeforeBinaryOperators: All
