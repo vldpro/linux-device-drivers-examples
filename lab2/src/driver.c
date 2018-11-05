@@ -1,59 +1,53 @@
-#include <linux/module.h>
-#include <linux/version.h>
-#include <linux/kernel.h>
-#include <linux/types.h>
-#include <linux/kdev_t.h>
-#include <linux/fs.h>
-#include <linux/spinlock.h>
 #include <linux/blkdev.h>
+#include <linux/fs.h>
+#include <linux/kdev_t.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
+#include <linux/version.h>
 #include <linux/vmalloc.h>
 
 #include "constants.h"
 #include "logging.h"
 
 
-struct drv_blkdev {
+struct drv_blkdev
+{
     int size;
-    uint8_t* vdisk;
+    uint8_t * vdisk;
     spinlock_t lock;
-    struct request_queue *queue;
-    struct gendisk *gd;
+    struct request_queue * queue;
+    struct gendisk * gd;
 };
 
 
-struct drv_blkdev_geo {
+struct drv_blkdev_geo
+{
     int nsectors;
     int sector_sz;
 };
 
 
-static void drv_request(struct request_queue *queue) { }
+static void drv_request(struct request_queue * queue) {}
 
 
-static int drv_open(struct inode *inode, struct file *filp)
+static int drv_open(struct inode * inode, struct file * filp) {}
+
+
+static int drv_release(struct inode * inode, struct file * filp) {}
+
+
+static struct block_device_operations blk_ops
+    = {.open = drv_open, .release = drv_release, .owner = THIS_MODULE};
+
+
+static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
+                                       struct block_device_operations * drv_ops,
+                                       int major,
+                                       int minors)
 {
-
-}
-
-
-static int drv_release(struct inode *inode, struct file *filp)
-{
-
-}
-
-
-static struct block_device_operations blk_ops = {
-    .open = drv_open,
-    .release = drv_release,
-    .owner = THIS_MODULE
-};
-
-
-static struct gendisk *gendisk_create(struct drv_blkdev *bdev,
-                                      struct block_device_operations *drv_ops,
-                                      int major, int minors)
-{
-    struct gendisk *gd = alloc_disk(minors);
+    struct gendisk * gd = alloc_disk(minors);
     if (!gd) {
         DRV_LOG_INIT(ERR, "Failed to alloc memory for gendisk");
         return NULL;
@@ -66,19 +60,18 @@ static struct gendisk *gendisk_create(struct drv_blkdev *bdev,
     gd->queue = bdev->queue;
     gd->private_data = bdev;
 
-    snprintf (gd->disk_name, 32, DRV_NAME "%c", which + 'a');
+    snprintf(gd->disk_name, 32, DRV_NAME "%c", which + 'a');
     set_capacity(gd, bdev->size);
 
     return gd;
 }
 
 
-static struct block_device *bdev_create(int major, 
-                                        int minors,
-                                        struct drv_blkdev_geo geo)
+static struct block_device *
+bdev_create(int major, int minors, struct drv_blkdev_geo geo)
 {
     // Alloc mem for block dev
-    struct drv_blkdev *bdev = kmalloc(sizeof(struct block_device), GFP_KERNEL);
+    struct drv_blkdev * bdev = kmalloc(sizeof(struct block_device), GFP_KERNEL);
     if (!bdev) {
         DRV_LOG_INIT(ERR, "Failed to alloc memory for block_device");
         goto out;
@@ -99,8 +92,7 @@ static struct block_device *bdev_create(int major,
     bdev->queue = blk_init_queue(drv_request, &bdev->lock);
 
     // Create gendisk structure
-    bdev->gd = gendisk_create(bdev, &blk_ops, 
-                              major, minors);
+    bdev->gd = gendisk_create(bdev, &blk_ops, major, minors);
     if (!bdev->gd) {
         DRV_LOG_INIT(ERR, "Failed to allocate gendisk");
         goto undo_init_queue;
@@ -118,11 +110,10 @@ undo_bdev_alloc:
     kfree(bdev);
 out:
     return NULL;
-
 }
 
 
-static void bdev_delete(struct drv_blkdev *bdev)
+static void bdev_delete(struct drv_blkdev * bdev)
 {
     vfree(bdev->queue);
     vfree(bdev->vdisk);
@@ -130,7 +121,7 @@ static void bdev_delete(struct drv_blkdev *bdev)
 }
 
 
-static int __init drv_init(void) 
+static int __init drv_init(void)
 {
     DRV_LOG_INIT(INFO, "Starting initialization\n");
     int major = register_blkdev(15, DRV_NAME);
@@ -140,11 +131,9 @@ static int __init drv_init(void)
         goto err;
     }
 
-    struct drv_blkdev_geo geo = {
-        .nsectors = DRV_NSECTORS,
-        .sector_sz = DRV_SECTOR_SZ
-    };
-    struct drv_blkdev *bdev = bdev_create(major, DRV_MINORS, geo);
+    struct drv_blkdev_geo geo
+        = {.nsectors = DRV_NSECTORS, .sector_sz = DRV_SECTOR_SZ};
+    struct drv_blkdev * bdev = bdev_create(major, DRV_MINORS, geo);
     add_disk(bdev->gd);
 
     DRV_LOG_INIT(INFO, "Successfully initialized");
@@ -153,11 +142,11 @@ static int __init drv_init(void)
 undo_blkdev_reg:
     unregister_blkdev(major, DRV_NAME);
 err:
-    return -EBUSY; 
+    return -EBUSY;
 }
 
 
-static void __exit drv_exit(void) { }
+static void __exit drv_exit(void) {}
 
 
 MODULE_LICENSE("GPL");
