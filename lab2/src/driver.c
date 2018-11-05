@@ -18,6 +18,8 @@ struct drv_blkdev
     int minors;
     struct gendisk * gd;
     struct request_queue * queue;
+    char * vdisk;
+    size_t size;
     spinlock_t lock;
 };
 
@@ -26,10 +28,63 @@ static struct
     int blk_major;
     struct drv_blkdev blkdev;
     struct block_device_operations blk_ops;
-} module_globals = {.blk_major = 0, .blk_ops = {.owner = THIS_MODULE}};
+} module_globals = {
+    .blk_major = 0,
+    .blkdev
+    = {.vdisk = NULL, .queue = NULL, size = 0, gd = NULL, minors = DRV_MINORS},
+    .blk_ops = {.owner = THIS_MODULE}};
 
 
-static void drv_request_handler(struct request_queue * queue) {}
+static void drv_transfer(struct drv_blkdev * blkdev,
+                         size_t sector,
+                         size_t nsect,
+                         char const * buf,
+                         int write)
+{
+    DRV_LOG_CTX_SET("drv_transfer");
+
+    size_t off = sector * DRV_SECTOR_SZ;
+    size_t nbytes = nsect * DRV_SECTOR_SZ;
+
+    if ((off + nbytes) > blkdev->size) {
+        LG_FAILED_TO("write to / read from device. Out of bound.");
+        return;
+    }
+
+    if (write)
+        memcpy(blkdev->vdisk + offset, buf, nbytes);
+    else
+        memcpy(buf, blkdev->vdisk + offset, nbytes);
+}
+
+
+static void drv_request_handler(struct request_queue * queue)
+{
+    struct request * rq = NULL;
+    struct drv_blkdev blkdev = queue->queuedata;
+
+    DRV_LOG_CTX_SET("drv_request_handler");
+
+    for (;;) {
+        rq = blk_fetch_request(q);
+        if (rq == NULL)
+            break;
+
+        if (blk_rq_is_passthrough(rq)) {
+            LG_WRN("Skip non-fs request");
+            __blk_end_request_all(rq, -EIO);
+            continue;
+        }
+
+        drv_transfer(blkdev,
+                     rq->sector,
+                     rq->current_nr_sectors,
+                     rq->buffer,
+                     rq_data_dir(rq));
+
+        __blk_end_request_all(rq, 0);
+    }
+}
 
 
 static int drv_gendisk_create(struct drv_blkdev * blkdev)
@@ -55,7 +110,7 @@ static int drv_gendisk_create(struct drv_blkdev * blkdev)
     // See https://stackoverflow.com/questions/13518404/add-disk-hangs-on-insmod
     set_capacity(blkdev->gd, 0);
     add_disk(blkdev->gd);
-    set_capacity(blkdev->gd, DRV_NSECTORS);
+    set_capacity(blkdev->gd, blkdev->size);
 
     return DRV_OP_SUCCESS;
 }
@@ -74,12 +129,20 @@ static int drv_blkdev_init(struct drv_blkdev * blkdev, int minors)
 
     blkdev->minors = minors;
 
+    LG_DBG("Allocate memory for vdisk");
+    blkdev->size = DRV_SECTOR_SZ * DRV_NSECTORS;
+    blkdev->vdisk = vmalloc(blkdev->size);
+    if (blkdev->vdisk == NULL) {
+        LG_FAILED_TO("allocate memory for vdisk");
+        goto out;
+    }
+
     LG_DBG("Initialize queue");
     spin_lock_init(&blkdev->lock);
     blkdev->queue = blk_init_queue(drv_request_handler, &blkdev->lock);
     if (!blkdev->queue) {
         LG_FAILED_TO("initialize requests queue");
-        goto out;
+        goto undo_vdisk_alloc;
     }
 
     LG_DBG("Setting blk logical size");
@@ -96,7 +159,11 @@ static int drv_blkdev_init(struct drv_blkdev * blkdev, int minors)
 
 undo_blk_queue_init:
     blk_cleanup_queue(blkdev->queue);
+undo_vdisk_alloc:
+    vfree(blkdev->vdisk);
 out:
+    blkdev->vdisk = NULL;
+    blkdev->size = 0;
     return -ENOMEM;
 }
 
@@ -105,6 +172,12 @@ static void drv_blkdev_deinit(struct drv_blkdev * blkdev)
 {
     drv_gendisk_delete(blkdev->gd);
     blk_cleanup_queue(blkdev->queue);
+    vfree(blkdev->vdisk);
+
+    blkdev->gd = NULL;
+    blkdev->queue = NULL;
+    blkdev->vdisk = NULL;
+    blkdev->size = 0;
 }
 
 
