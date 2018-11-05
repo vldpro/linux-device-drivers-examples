@@ -36,23 +36,23 @@ static int drv_gendisk_create(struct drv_blkdev * blkdev)
 {
     DRV_LOG_CTX_SET("drv_gendisk_create");
 
-    LG_DBG("Alloc gendisk")
-    dev->gd = alloc_disk(blkdev->minors);
-    if (dev->gd)
+    LG_DBG("Alloc gendisk");
+    blkdev->gd = alloc_disk(blkdev->minors);
+    if (blkdev->gd)
         return -ENOMEM;
 
     LG_DBG("Initialize gendisk");
-    dev->gd->major = module_globals.blk_major;
-    dev->gd->first_minor = 0;
-    dev->gd->fops = &module_globals.blk_ops;
-    dev->gd->queue = blkdev->queue;
-    dev->gd->private_data = blkdev;
+    blkdev->gd->major = module_globals.blk_major;
+    blkdev->gd->first_minor = 0;
+    blkdev->gd->fops = &module_globals.blk_ops;
+    blkdev->gd->queue = blkdev->queue;
+    blkdev->gd->private_data = blkdev;
 
-    snprintf(dev->gd->disk_name, DRV_DISKNAME_MAX, DRV_NAME);
-    set_capacity(dev->gd, DRV_NSECTORS);
+    snprintf(blkdev->gd->disk_name, DRV_DISKNAME_MAX, DRV_NAME);
+    set_capacity(blkdev->gd, DRV_NSECTORS);
 
     LG_DBG("Adding gendisk into the system");
-    add_disk(dev->gd);
+    add_disk(blkdev->gd);
 
     return DRV_OP_SUCCESS;
 }
@@ -72,7 +72,7 @@ static int drv_blkdev_init(struct drv_blkdev * blkdev, int minors)
     blkdev->minors = minors;
 
     LG_DBG("Initialize queue");
-    spin_lock_init(blkdev->lock);
+    spin_lock_init(&blkdev->lock);
     blkdev->queue = blk_init_queue(drv_request_handler, &blkdev->lock);
     if (!blkdev->queue) {
         LG_FAILED_TO("initialize requests queue");
@@ -86,7 +86,7 @@ static int drv_blkdev_init(struct drv_blkdev * blkdev, int minors)
     LG_DBG("Create gendisk");
     if (drv_gendisk_create(blkdev) < 0) {
         LG_FAILED_TO("create gendisk");
-        goto blk_cleanup_queue;
+        goto undo_blk_queue_init;
     }
 
     return DRV_OP_SUCCESS;
@@ -121,7 +121,7 @@ static int __init drv_init(void)
     }
 
     LG_DBG("Initialize blkdev");
-    status = drv_blkdev_init(module_globals.blkdev);
+    status = drv_blkdev_init(&module_globals.blkdev, DRV_MINORS);
     if (status < 0) {
         LG_FAILED_TO("initialize blkdev");
         goto undo_blkdev_reg;
@@ -138,7 +138,7 @@ out:
 
 static void __exit drv_exit(void)
 {
-    drv_blkdev_deinit(module_globals.blkdev);
+    drv_blkdev_deinit(&module_globals.blkdev);
     unregister_blkdev(module_globals.blk_major, DRV_NAME);
 }
 
