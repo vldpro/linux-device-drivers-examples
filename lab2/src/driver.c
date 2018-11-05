@@ -32,10 +32,13 @@ struct drv_blkdev_geo
 static void drv_request(struct request_queue * queue) {}
 
 
-static int drv_open(struct inode * inode, struct file * filp) {}
+static int drv_open(struct block_device * dev, fmode_t mode)
+{
+    return 0;
+}
 
 
-static int drv_release(struct inode * inode, struct file * filp) {}
+static void drv_release(struct gendisk * gd, fmode_t mode) {}
 
 
 static struct block_device_operations blk_ops
@@ -47,16 +50,17 @@ static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
                                        int major,
                                        int minors)
 {
+    int which = 0;
     struct gendisk * gd = alloc_disk(minors);
+
     if (!gd) {
         DRV_LOG_INIT(ERR, "Failed to alloc memory for gendisk");
         return NULL;
     }
 
-    int which = 0;
     gd->major = major;
     gd->first_minor = which * minors;
-    gd->fops = &drv_ops;
+    gd->fops = drv_ops;
     gd->queue = bdev->queue;
     gd->private_data = bdev;
 
@@ -67,7 +71,7 @@ static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
 }
 
 
-static struct block_device *
+static struct drv_blkdev *
 bdev_create(int major, int minors, struct drv_blkdev_geo geo)
 {
     // Alloc mem for block dev
@@ -90,6 +94,10 @@ bdev_create(int major, int minors, struct drv_blkdev_geo geo)
     // Create block device request queue
     spin_lock_init(&bdev->lock);
     bdev->queue = blk_init_queue(drv_request, &bdev->lock);
+    if (!bdev->queue) {
+        DRV_LOG_INIT(ERR, "Failed to allocate memory for blk queue");
+        goto undo_bdisk_alloc;
+    }
 
     // Create gendisk structure
     bdev->gd = gendisk_create(bdev, &blk_ops, major, minors);
@@ -113,29 +121,36 @@ out:
 }
 
 
-static void bdev_delete(struct drv_blkdev * bdev)
+/*static void bdev_delete(struct drv_blkdev * bdev)
 {
     vfree(bdev->queue);
     vfree(bdev->vdisk);
     kfree(bdev);
-}
+}*/
 
 
 static int __init drv_init(void)
 {
+    int major = 15;
+    struct drv_blkdev * bdev = NULL;
+    struct drv_blkdev_geo geo
+        = {.nsectors = DRV_NSECTORS, .sector_sz = DRV_SECTOR_SZ};
+
     DRV_LOG_INIT(INFO, "Starting initialization\n");
-    int major = register_blkdev(15, DRV_NAME);
+    major = register_blkdev(major, DRV_NAME);
 
     if (major <= 0) {
         DRV_LOG_INIT(ERR, "Could not register block device\n");
         goto err;
     }
 
-    struct drv_blkdev_geo geo
-        = {.nsectors = DRV_NSECTORS, .sector_sz = DRV_SECTOR_SZ};
-    struct drv_blkdev * bdev = bdev_create(major, DRV_MINORS, geo);
-    add_disk(bdev->gd);
+    bdev = bdev_create(major, DRV_MINORS, geo);
+    if (!bdev) {
+        DRV_LOG_INIT(ERR, "Could not create bdev");
+        goto undo_blkdev_reg;
+    }
 
+    add_disk(bdev->gd);
     DRV_LOG_INIT(INFO, "Successfully initialized");
     return DRV_OP_SUCCESS;
 
