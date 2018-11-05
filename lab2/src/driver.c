@@ -54,7 +54,7 @@ static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
     struct gendisk * gd = alloc_disk(minors);
 
     if (!gd) {
-        DRV_LOG_INIT(ERR, "Failed to alloc memory for gendisk");
+        DRV_LOG_INIT(ERR, "Failed to alloc memory for gendisk\n");
         return NULL;
     }
 
@@ -93,13 +93,16 @@ bdev_create(int major, int minors, struct drv_blkdev_geo geo)
         goto undo_bdev_alloc;
     }
 
-    DRV_LOG_INIT(DEBUG, "Create device's request queue\n");
     spin_lock_init(&bdev->lock);
+
+    DRV_LOG_INIT(DEBUG, "Create device's request queue\n");
     bdev->queue = blk_init_queue(drv_request, &bdev->lock);
     if (!bdev->queue) {
         DRV_LOG_INIT(ERR, "Failed to allocate memory for blk queue\n");
         goto undo_bdisk_alloc;
     }
+
+    blk_queue_logical_block_size(bdev->queue, geo.sector_sz);
 
     DRV_LOG_INIT(DEBUG, "Create gendisk structure\n");
     bdev->gd = gendisk_create(bdev, &blk_ops, major, minors);
@@ -124,8 +127,11 @@ out:
 
 static int __init drv_init(void)
 {
-    DRV_LOG_INIT(INFO, "Starting initialization\n");
-    DRV_LOG_INIT(DEBUG, "Register block device");
+    DRV_LOG_CTX_SET("my_init");
+    DRV_LOG_CTX(INFO, "Starting initialization");
+    return -EBUSY;
+
+    DRV_LOG_INIT(DEBUG, "Register block device\n");
     module_scope.major = register_blkdev(module_scope.major, DRV_NAME);
 
     if (module_scope.major <= 0) {
@@ -133,16 +139,16 @@ static int __init drv_init(void)
         goto err;
     }
 
-    DRV_LOG_INIT(DEBUG, "Create block device");
+    DRV_LOG_INIT(DEBUG, "Create block device\n");
     module_scope.blkdev
         = bdev_create(module_scope.major, DRV_MINORS, module_scope.disk_geo);
 
     if (!module_scope.blkdev) {
         DRV_LOG_INIT(ERR, "Could not create bdev\n");
         goto undo_blkdev_reg;
-    }
+    };
 
-    DRV_LOG_INIT(DEBUG, "Add disk to the system");
+    DRV_LOG_INIT(DEBUG, "Add disk to the system\n");
     add_disk(module_scope.blkdev->gd);
     DRV_LOG_INIT(INFO, "Successfully initialized\n");
     return DRV_OP_SUCCESS;
