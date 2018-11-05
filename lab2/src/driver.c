@@ -40,21 +40,9 @@ static struct
        .device_name = DRV_NAME,
        .major = 0};
 
+static struct block_device_operations blk_ops = {.owner = THIS_MODULE};
 
 static void drv_request(struct request_queue * queue) {}
-
-
-static int drv_open(struct block_device * dev, fmode_t mode)
-{
-    return 0;
-}
-
-
-static void drv_release(struct gendisk * gd, fmode_t mode) {}
-
-
-static struct block_device_operations blk_ops
-    = {.open = drv_open, .release = drv_release, .owner = THIS_MODULE};
 
 
 static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
@@ -86,10 +74,10 @@ static struct gendisk * gendisk_create(struct drv_blkdev * bdev,
 static struct drv_blkdev *
 bdev_create(int major, int minors, struct drv_blkdev_geo geo)
 {
-    // Alloc mem for block dev
+    LOG_DRV_INIT(DBG, "Alloc mem for blkdev struct\n");
     struct drv_blkdev * bdev = kmalloc(sizeof(struct block_device), GFP_KERNEL);
     if (!bdev) {
-        DRV_LOG_INIT(ERR, "Failed to alloc memory for block_device");
+        DRV_LOG_INIT(ERR, "Failed to alloc memory for block_device\n");
         goto out;
     }
 
@@ -97,29 +85,28 @@ bdev_create(int major, int minors, struct drv_blkdev_geo geo)
     bdev->size = geo.nsectors * geo.sector_sz;
     bdev->vdisk = vmalloc(bdev->size);
 
-    // Alloc mem for virtual disk
+    LOG_DRV_INIT(DBG, "Alloc mem for vritual disk\n");
     if (bdev->vdisk == NULL) {
-        DRV_LOG_INIT(ERR, "Failed to alloc memory for virtual disk");
+        DRV_LOG_INIT(ERR, "Failed to alloc memory for virtual disk\n");
         goto undo_bdev_alloc;
     }
 
-    // Create block device request queue
+    LOG_DRV_INIT(DBG, "Create device's request queue\n");
     spin_lock_init(&bdev->lock);
     bdev->queue = blk_init_queue(drv_request, &bdev->lock);
     if (!bdev->queue) {
-        DRV_LOG_INIT(ERR, "Failed to allocate memory for blk queue");
+        DRV_LOG_INIT(ERR, "Failed to allocate memory for blk queue\n");
         goto undo_bdisk_alloc;
     }
 
-    // Create gendisk structure
+    LOG_DRV_INIT(DBG, "Create gendisk structure\n");
     bdev->gd = gendisk_create(bdev, &blk_ops, major, minors);
     if (!bdev->gd) {
-        DRV_LOG_INIT(ERR, "Failed to allocate gendisk");
+        DRV_LOG_INIT(ERR, "Failed to allocate gendisk\n");
         goto undo_init_queue;
     }
 
-    // Add disk to the system
-    DRV_LOG_INIT(INFO, "Block device successfully created");
+    DRV_LOG_INIT(INFO, "Block device successfully created\n");
     return bdev;
 
 undo_init_queue:
@@ -131,14 +118,6 @@ undo_bdev_alloc:
 out:
     return NULL;
 }
-
-
-/*static void bdev_delete(struct drv_blkdev * bdev)
-{
-    vfree(bdev->queue);
-    vfree(bdev->vdisk);
-    kfree(bdev);
-}*/
 
 
 static int __init drv_init(void)
@@ -155,12 +134,12 @@ static int __init drv_init(void)
         = bdev_create(module_scope.major, DRV_MINORS, module_scope.disk_geo);
 
     if (!module_scope.blkdev) {
-        DRV_LOG_INIT(ERR, "Could not create bdev");
+        DRV_LOG_INIT(ERR, "Could not create bdev\n");
         goto undo_blkdev_reg;
     }
 
     add_disk(module_scope.blkdev->gd);
-    DRV_LOG_INIT(INFO, "Successfully initialized");
+    DRV_LOG_INIT(INFO, "Successfully initialized\n");
     return DRV_OP_SUCCESS;
 
 undo_blkdev_reg:
