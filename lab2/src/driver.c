@@ -27,7 +27,26 @@ struct drv_blkdev_geo {
 };
 
 
-void drv_request(struct request_queue *queue) { }
+static void drv_request(struct request_queue *queue) { }
+
+
+static int drv_open(struct inode *inode, struct file *filp)
+{
+
+}
+
+
+static int drv_release(struct inode *inode, struct file *filp)
+{
+
+}
+
+
+static struct block_device_operations blk_ops = {
+    .open = drv_open,
+    .release = drv_release,
+    .owner = THIS_MODULE
+};
 
 
 static struct gendisk *gendisk_create(struct drv_blkdev *bdev,
@@ -80,7 +99,7 @@ static struct block_device *bdev_create(int major,
     bdev->queue = blk_init_queue(drv_request, &bdev->lock);
 
     // Create gendisk structure
-    bdev->gd = gendisk_create(bdev, NULL, 
+    bdev->gd = gendisk_create(bdev, &blk_ops, 
                               major, minors);
     if (!bdev->gd) {
         DRV_LOG_INIT(ERR, "Failed to allocate gendisk");
@@ -100,6 +119,14 @@ undo_bdev_alloc:
 out:
     return NULL;
 
+}
+
+
+static void bdev_delete(struct drv_blkdev *bdev)
+{
+    vfree(bdev->queue);
+    vfree(bdev->vdisk);
+    kfree(bdev);
 }
 
 
