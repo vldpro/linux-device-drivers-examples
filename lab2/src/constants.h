@@ -9,5 +9,7 @@
 #define DRV_SECTOR_SZ 512
 #define DRV_MINORS 16
 
+#define KERNEL_SECTOR_SIZE 512
+
 
 #endif

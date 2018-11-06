@@ -38,6 +38,40 @@ static struct
                     .blk_ops = {.owner = THIS_MODULE}};
 
 
+int drv_ioctl(struct inode * inode,
+              struct file * filp,
+              unsigned int cmd,
+              unsigned long arg)
+{
+    DRV_LOG_CTX_SET("drv_ioctl");
+    long size;
+    struct hd_geometry geo;
+
+    switch (cmd) {
+            /*
+	 * The only command we need to interpret is HDIO_GETGEO, since
+	 * we can't partition the drive otherwise.  We have no real
+	 * geometry, of course, so make something up.
+	 */
+        case HDIO_GETGEO:
+            LG_DBG("retreiving disk geo");
+            size = module_globals.blkdev.size
+                   * (DRV_SECTOR_SZ / KERNEL_SECTOR_SIZE);
+            geo.cylinders = (size & ~0x3f) >> 6;
+            geo.heads = 4;
+            geo.sectors = 16;
+            geo.start = 4;
+
+            if (copy_to_user((void *)arg, &geo, sizeof(geo)))
+                return -EFAULT;
+            return 0;
+    }
+
+    LG_DBG("unknown commad");
+    return -ENOTTY; /* unknown command */
+}
+
+
 static int drv_transfer(struct drv_blkdev * blkdev,
                         sector_t sector,
                         size_t nsect,
@@ -79,8 +113,8 @@ static void drv_request_handler(struct request_queue * queue)
 
     DRV_LOG_CTX_SET("drv_request_handler");
 
+    rq = blk_fetch_request(queue);
     for (;;) {
-        rq = blk_fetch_request(queue);
         if (rq == NULL)
             break;
 
@@ -96,7 +130,8 @@ static void drv_request_handler(struct request_queue * queue)
                                      bio_data(rq->bio),
                                      rq_data_dir(rq));
 
-        __blk_end_request_all(rq, blk_op_status);
+        if (!__blk_end_request_cur(rq, blk_op_status))
+            rq = blk_fetch_request(queue);
     }
 }
 
@@ -124,7 +159,8 @@ static int drv_gendisk_create(struct drv_blkdev * blkdev)
     // See https://stackoverflow.com/questions/13518404/add-disk-hangs-on-insmod
     set_capacity(blkdev->gd, 0);
     add_disk(blkdev->gd);
-    set_capacity(blkdev->gd, blkdev->size);
+    set_capacity(blkdev->gd,
+                 DRV_NSECTORS * (DRV_SECTOR_SZ / KERNEL_SECTOR_SIZE));
 
     return DRV_OP_SUCCESS;
 }
@@ -229,8 +265,10 @@ out:
 
 static void __exit drv_exit(void)
 {
+    DRV_LOG_CTX_SET("drv_exit");
     drv_blkdev_deinit(&module_globals.blkdev);
     unregister_blkdev(module_globals.blk_major, DRV_NAME);
+    LG_DBG("Module was removed");
 }
 
 
