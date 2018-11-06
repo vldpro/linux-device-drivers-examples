@@ -38,7 +38,13 @@
 // user's logging functions
 #define LG_INF(log_msg) DRV_LOG_CTX(INFO, log_msg)
 #define LG_ERR(log_msg) DRV_LOG_CTX(ERR, log_msg)
+
+#ifndef DRV_LOG_DISABLE_DEBUG
 #define LG_DBG(log_msg) DRV_LOG_CTX(DEBUG, log_msg)
+#else
+#define LG_DBG(log_msg)
+#endif
+
 #define LG_WRN(log_msg) DRV_LOG_CTX(WARNING, log_msg)
 #define LG_FAILED_TO(action) LG_ERR("Failed to " action)
 

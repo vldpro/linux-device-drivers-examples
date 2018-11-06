@@ -10,6 +10,8 @@
 #include <linux/version.h>
 #include <linux/vmalloc.h>
 
+#define DRV_LOG_DISABLE_DEBUG
+
 #include "constants.h"
 #include "logging.h"
 
@@ -43,9 +45,9 @@ int drv_ioctl(struct inode * inode,
               unsigned int cmd,
               unsigned long arg)
 {
-    DRV_LOG_CTX_SET("drv_ioctl");
     long size;
     struct hd_geometry geo;
+    DRV_LOG_CTX_SET("drv_ioctl");
 
     switch (cmd) {
             /*
@@ -82,6 +84,7 @@ static int drv_transfer(struct drv_blkdev * blkdev,
     size_t nbytes = nsect * DRV_SECTOR_SZ;
     DRV_LOG_CTX_SET("drv_transfer");
 
+#ifndef DRV_LOG_DISABLE_DEBUG
     printk(KERN_DEBUG "drv_transfer: params: off: %lu, nbytes: %lu\n",
            off,
            nbytes);
@@ -90,6 +93,7 @@ static int drv_transfer(struct drv_blkdev * blkdev,
         LG_DBG("start writing");
     else
         LG_DBG("start reading");
+#endif
 
     if ((off + nbytes) > blkdev->size) {
         LG_FAILED_TO("write to / read from device. Out of bound.");
