@@ -1,3 +1,4 @@
+#include <linux/etherdevice.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -10,6 +11,13 @@
 #define DRV_INTERFACE_NAME "ndev%d"
 #define DRV_RES_SUCCESS 0
 
+struct dev_priv
+{
+    struct net_device_stats stats;
+    int status;
+    struct sk_buff * skb;
+    spinlock_t lock;
+};
 
 static struct
 {
@@ -17,12 +25,22 @@ static struct
 } mod = {.dev = NULL};
 
 
+static void ndev_init(struct net_device * dev)
+{
+    ether_setup(dev);
+    struct dev_priv * priv = netdev_priv(dev);
+
+    memset(priv, 0, sizeof(struct dev_priv));
+    spin_lock_init(&priv->lock)
+}
+
+
 static int __init drv_init(void)
 {
     DRV_LOG_CTX_SET("drv_init");
     LG_DBG("Initializing network interface...");
 
-    mod.dev = alloc_netdev(0, DRV_INTERFACE_NAME, NULL);
+    mod.dev = alloc_netdev(0, DRV_INTERFACE_NAME, ndev_init);
     if (mod.dev == NULL) {
         LG_FAILED_TO("alloc network device.");
         return ENOMEM;
@@ -38,7 +56,13 @@ static int __init drv_init(void)
 }
 
 
-static void __exit drv_exit(void) {}
+static void __exit drv_exit(void)
+{
+    DRV_LOG_CTX_SET("drv_exit");
+    LG_INF("Deinitializing module");
+    unregister_netdev(mod.dev);
+    free_netdev(mod.dev);
+}
 
 
 MODULE_LICENSE("GPL");
