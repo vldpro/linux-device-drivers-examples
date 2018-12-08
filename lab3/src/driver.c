@@ -25,6 +25,20 @@ static struct
 } mod = {.dev = NULL};
 
 
+static int ndev_open(struct net_device * dev)
+{
+    memcpy(dev->dev_addr, "\0ndev0", ETH_ALEN);
+    netif_start_queue(dev);
+    return DRV_RES_SUCCESS;
+}
+
+
+static int ndev_release(struct ned_device * dev)
+{
+    netif_stop_queue(dev);
+}
+
+
 static void ndev_init(struct net_device * dev)
 {
     ether_setup(dev);
