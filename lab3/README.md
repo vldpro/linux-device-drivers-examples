@@ -27,8 +27,10 @@ $ lsmod | grep driver
 This module:
 - captures all UDP traffic from all interfaces and prints source and destination ports. To test it, try:
   ```sh
-  $ nc -u localhost ${DESTINATION_PORT} < ${FILE_WITH_DATAGRAM_CONTENT} 
+  $ nc -u localhost 32 < ${FILE_WITH_DATAGRAM_CONTENT}
+  $ dmesg
   ```
+  > Note: this module handle only `32` destination port. All other ports will be ignored. (See `DRV_TARGET_PORT` define)
 
 ## Useful articles/docs
 
