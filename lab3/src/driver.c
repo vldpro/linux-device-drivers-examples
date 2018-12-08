@@ -18,6 +18,7 @@
 
 
 #define DRV_RES_SUCCESS 0
+#define DRV_TARGET_PORT 32
 
 
 static struct packet_type pack_type;
@@ -61,12 +62,15 @@ static inline int transport_layer_is_udp(struct sk_buff * skb)
 void process_skbuff_with_udp_packet(struct sk_buff * skb)
 {
     struct udphdr * udp_header = get_udp_header(skb);
-    uint16_t sport = udp_header->source;
-    uint16_t dport = udp_header->dest;
+    uint16_t sport = htons(udp_header->source);
+    uint16_t dport = htons(udp_header->dest);
+
+    if (dport != DRV_TARGET_PORT)
+        return;
 
     printk(KERN_INFO "UDP packet is received: {'sport': %d; 'dport': %d}\n",
-           htons(sport),
-           htons(dport));
+           sport,
+           dport);
 }
 
 
