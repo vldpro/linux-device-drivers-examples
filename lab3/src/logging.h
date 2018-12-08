@@ -6,11 +6,11 @@
 #include <linux/module.h>
 #include <linux/version.h>
 
-#define DRV_NAME "memes"
+#define DRV_NAME "ndev%d"
 #define DRV_LOG_DELIM ": "
 
 // General purpose log
-#define DRV_LOG_NAME "driver"
+#define DRV_LOG_NAME "network_driver"
 #define DRV_LOG(type, ctx, ...)                                          \
     do {                                                                 \
         printk(KERN_##type DRV_LOG_NAME DRV_LOG_DELIM DRV_LOG_DELIM ctx, \
