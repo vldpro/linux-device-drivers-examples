@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "errno.h": "c",
+        "string.h": "c",
+        "syscalls.h": "c"
+    },
+    "editor.formatOnSave": true,
+    "clang-format.assumeFilename": ".clang-format",
+    "C_Cpp.default.intelliSenseMode": "gcc-x64",
+    "c-cpp-flylint.language": "c"
+}
