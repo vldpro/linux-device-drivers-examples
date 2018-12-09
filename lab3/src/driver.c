@@ -64,18 +64,20 @@ static inline int transport_layer_is_udp(struct sk_buff * skb)
 //
 
 
-void process_skbuff_with_udp_packet(struct sk_buff * skb)
+int process_skbuff_with_udp_packet(struct sk_buff * skb)
 {
     struct udphdr * udp_header = get_udp_header(skb);
     uint16_t sport = htons(udp_header->source);
     uint16_t dport = htons(udp_header->dest);
 
     if (dport != DRV_TARGET_PORT)
-        return;
+        return DRV_RES_FAILURE;
 
     printk(KERN_INFO "UDP packet is received: {'sport': %d; 'dport': %d}\n",
            sport,
            dport);
+
+    return DRV_RES_SUCCESS;
 }
 
 
@@ -88,15 +90,21 @@ int handle_packet(struct sk_buff * skb,
 
     if (!network_layer_is_ip(skb)) {
         LG_DBG("Invalid network layer protocol. IP is expected. Skipping");
+        mod.netdev_statistics.rx_errors++;
         return DRV_RES_SUCCESS;
     }
 
     if (!transport_layer_is_udp(skb)) {
         LG_DBG("Invalid transport layer protocol. UDP is expected. Skipping");
+        mod.netdev_statistics.rx_errors++;
         return DRV_RES_SUCCESS;
     }
 
-    process_skbuff_with_udp_packet(skb);
+    int res = process_skbuff_with_udp_packet(skb);
+    if (res == DRV_RES_SUCCESS)
+        mod.netdev_statistics.rx_packets++;
+    else
+        mod.netdev_statistics.rx_dropped++;
     return DRV_RES_SUCCESS;
 }
 
@@ -188,7 +196,7 @@ static int setup_network_interface(void)
         LG_FAILED_TO("allocate ethernet device");
         goto out;
     }
-
+    mod.netdev->flags |= IFF_NOARP;
     mod.netdev->netdev_ops = &ndev_ops;
     if (register_netdev(mod.netdev)) {
         LG_FAILED_TO("register network device");
