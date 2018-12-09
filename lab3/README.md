@@ -31,6 +31,10 @@ This module:
   $ dmesg
   ```
   > Note: this module handle only `32` destination port. All other ports will be ignored. (See `DRV_TARGET_PORT` define)
+- Look at new interaface with its statistics with `ifconfig -a`
+  - rx packets - successfully received packets
+  - rx dropped - UDP packets with port != 32
+  - rx errors - not UDP/IP packets
 
 ## Useful articles/docs
 
