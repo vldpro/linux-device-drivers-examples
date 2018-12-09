@@ -21,10 +21,13 @@
 #define DRV_RES_FAILURE -1
 #define DRV_TARGET_PORT 32
 
+static struct
+{
+    struct packet_type pack_type;
+    struct net_device * netdev;
+    struct net_device_stats netdev_statistics;
+} mod;
 
-static struct packet_type pack_type;
-static struct net_device * netdev = NULL;
-static struct net_device_stats netdev_statistics;
 
 //
 // Helpers
@@ -100,18 +103,18 @@ int handle_packet(struct sk_buff * skb,
 
 static int setup_packet_interception(void)
 {
-    pack_type.type = htons(ETH_P_IP);
-    pack_type.dev = NULL;
-    pack_type.func = handle_packet;
+    mod.pack_type.type = htons(ETH_P_IP);
+    mod.pack_type.dev = NULL;
+    mod.pack_type.func = handle_packet;
 
-    dev_add_pack(&pack_type);
+    dev_add_pack(&mod.pack_type);
     return DRV_RES_SUCCESS;
 }
 
 
 static void release_packet_interception(void)
 {
-    dev_remove_pack(&pack_type);
+    dev_remove_pack(&mod.pack_type);
 }
 
 
@@ -155,7 +158,7 @@ static struct net_device_stats * ndev_get_stats(struct net_device * dev)
 {
     DRV_LOG_CTX_SET("device_stats")
     LG_INF("Retrieving device stats");
-    return &netdev_statistics;
+    return &mod.netdev_statistics;
 }
 
 
@@ -167,28 +170,27 @@ static int ndev_set_config(struct net_device * dev, struct ifmap * map)
 }
 
 
-static struct net_device_ops ndev_ops = {
-    .ndo_open = ndev_open,
-    .ndo_stop = ndev_stop,
-    .ndo_start_xmit = ndev_hard_start_xmit,
-    .ndo_tx_timeout = ndev_tx_timeout,
-    .ndo_get_stats = ndev_get_stats,
-    .ndo_set_config = ndev_set_config,
-};
-
-
 static int setup_network_interface(void)
 {
+    static struct net_device_ops ndev_ops = {
+        .ndo_open = ndev_open,
+        .ndo_stop = ndev_stop,
+        .ndo_start_xmit = ndev_hard_start_xmit,
+        .ndo_tx_timeout = ndev_tx_timeout,
+        .ndo_get_stats = ndev_get_stats,
+        .ndo_set_config = ndev_set_config,
+    };
+
     DRV_LOG_CTX_SET("setup_netwk")
 
-    netdev = alloc_etherdev(20);
-    if (netdev == NULL) {
+    mod.netdev = alloc_etherdev(20);
+    if (mod.netdev == NULL) {
         LG_FAILED_TO("allocate ethernet device");
         goto out;
     }
 
-    netdev->netdev_ops = &ndev_ops;
-    if (register_netdev(netdev)) {
+    mod.netdev->netdev_ops = &ndev_ops;
+    if (register_netdev(mod.netdev)) {
         LG_FAILED_TO("register network device");
         goto release_netdev;
     }
@@ -196,7 +198,7 @@ static int setup_network_interface(void)
     return DRV_RES_SUCCESS;
 
 release_netdev:
-    free_netdev(netdev);
+    free_netdev(mod.netdev);
 out:
     return DRV_RES_FAILURE;
 }
@@ -204,8 +206,8 @@ out:
 
 static void release_network_interface(void)
 {
-    unregister_netdev(netdev);
-    free_netdev(netdev);
+    unregister_netdev(mod.netdev);
+    free_netdev(mod.netdev);
 }
 
 
